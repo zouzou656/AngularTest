@@ -1,0 +1,29 @@
+<mat-toolbar color="primary">
+
+    <span class="toolbar-title">Users List</span>
+    <span class="example-spacer"></span>
+
+      <mat-form-field class="search-bar">
+        <mat-label>Search Users</mat-label>
+        <input matInput placeholder="Search" [(ngModel)]="searchQuery" (ngModelChange)="searchUser()">
+        <mat-icon matSuffix aria-label="Search">search</mat-icon>
+      </mat-form-field>
+</mat-toolbar>
+  
+
+<div class="container">
+
+
+  <mat-grid-list cols="3"  rowHeight="150px" >
+    <mat-grid-tile style="height: fit-content;" *ngFor="let user of filteredUsers">
+      <app-user-card [cardData]="user"></app-user-card>
+    </mat-grid-tile>
+  </mat-grid-list>
+
+  <mat-paginator
+    [pageSize]="filteredUsers.length"
+    [length]="totalPages*filteredUsers.length"
+    showFirstLastButtons
+    (page)="getUsers($event.pageIndex + 1)"
+  ></mat-paginator>
+</div>

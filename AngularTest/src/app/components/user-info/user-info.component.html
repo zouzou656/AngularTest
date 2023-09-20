@@ -1,0 +1,25 @@
+<mat-card class="user-info" style="width: 100%;">
+  <mat-toolbar color="primary">
+    <button mat-icon-button (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <span>User Information</span>
+  </mat-toolbar>
+
+  <div class="user-info-content">
+    <div class="user-info-left">
+      <mat-card-header>
+        <mat-card-title>{{ user.first_name }} {{ user.last_name }}</mat-card-title>
+        <mat-card-subtitle>{{ user.email }}</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p>
+          Lorem ipsum dolor sit amet consectetur adipisicing elit. Illum fugiat reprehenderit, porro facere impedit assumenda quo sit vitae, quasi voluptatum aut aliquid amet expedita blanditiis vero, voluptatem natus deserunt iste.
+        </p>
+      </mat-card-content>
+    </div>
+    <div class="user-info-right">
+      <img mat-card-image [src]="user.avatar" alt="User Avatar" />
+    </div>
+  </div>
+</mat-card>

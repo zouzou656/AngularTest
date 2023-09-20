@@ -1,0 +1,40 @@
+.container {
+  padding: 20px;
+}
+
+.user-list {
+  text-align: center;
+}
+
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.user-card {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.mat-form-field {
+  width: 100%;
+}
+.example-spacer {
+  flex: 1 1 auto;
+}
+.search-bar{
+margin-top: 20px;
+border-radius: initial;
+}

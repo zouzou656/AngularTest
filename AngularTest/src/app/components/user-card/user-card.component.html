@@ -1,0 +1,12 @@
+
+<mat-card class="user-card"  (click)="onClickUserInfo(cardData.id)">
+  <mat-card-header>
+    <div mat-card-avatar class="user-avatar">
+      <img [src]="cardData.avatar" alt="{{ cardData.first_name }} {{ cardData.last_name }}" class="avatar-image" />
+    </div>
+        <mat-card-title>{{ cardData.first_name }} {{ cardData.last_name }}</mat-card-title>
+    <mat-card-subtitle>{{ cardData.email }}</mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+  </mat-card-content>
+</mat-card>
