@@ -1,0 +1,14 @@
+declare function local:interpolate($template as xs:string, $values as xs:string*) as xs:string {
+  let $count := count($values)
+  return
+    fold-left(1 to $count, $template,
+      function($currentTemplate, $index) {
+        replace($currentTemplate, concat("\{", $index, "\}"), $values[$index])
+      }
+    )
+};
+
+(: Example usage :)
+let $template := "Hello {1}, your balance is ${2}, and you earned {3} points."
+let $result := local:interpolate($template, ("John", format-number(1234.567, "#,##0.00"), format-number(3000, "#,###")))
+return $result
