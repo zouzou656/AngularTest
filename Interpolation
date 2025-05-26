@@ -12,3 +12,25 @@ declare function local:interpolate($template as xs:string, $values as xs:string*
 let $template := "Hello {1}, your balance is ${2}, and you earned {3} points."
 let $result := local:interpolate($template, ("John", format-number(1234.567, "#,##0.00"), format-number(3000, "#,###")))
 return $result
+xquery version "1.0" encoding "utf-8";
+
+module namespace ns2="core.xquery.StringInterpolation";
+
+declare function ns2:interpolate($template as xs:string, $values as xs:string*) as xs:string {
+  if (empty($values)) then
+    $template
+  else
+    let $index := 1,
+        $placeholder := concat("{", $index, "}"),
+        $replacement := $values[1],
+        $updatedTemplate :=
+          if (contains($template, $placeholder)) then
+            concat(
+              substring-before($template, $placeholder),
+              $replacement,
+              ns2:interpolate(substring-after($template, $placeholder), subsequence($values, 2))
+            )
+          else
+            $template
+    return $updatedTemplate
+};
