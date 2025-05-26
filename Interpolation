@@ -34,3 +34,22 @@ declare function ns2:interpolate($template as xs:string, $values as xs:string*) 
             $template
     return $updatedTemplate
 };
+
+declare function ns2:interpolate($template as xs:string, $values as xs:string*) as xs:string {
+  if (empty($values)) then
+    $template
+  else
+    let $index := 1,
+        $placeholder := concat("{", $index, "}"),
+        $replacement := $values[1],
+        $updatedTemplate :=
+          if (contains($template, $placeholder)) then
+            concat(
+              substring-before($template, $placeholder),
+              $replacement,
+              ns2:interpolate(substring-after($template, $placeholder), subsequence($values, 2))
+            )
+          else
+            $template
+    return $updatedTemplate
+};
