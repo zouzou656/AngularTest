@@ -71,4 +71,143 @@ declare function ns2:interpolate($template as xs:string, $values as xs:string*, 
     return $updatedTemplate
 };
 
+using Yarp.ReverseProxy.Configuration;
+using System.Net;
+using Serilog;
+using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+#region Setup
+// Detect if the app is running as a Windows service
+var isWindowsService = !Environment.UserInteractive;
+
+if (isWindowsService)
+{
+    var pathToContentRoot = AppContext.BaseDirectory;
+    Directory.SetCurrentDirectory(pathToContentRoot);
+}
+
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "logs"));
+#endregion
+
+var builder = WebApplication.CreateBuilder(args);
+
+// If running on Windows, configure Windows Service
+if (OperatingSystem.IsWindows())
+{
+    builder.Host.UseWindowsService();
+}
+
+#region Serilog Configuration
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+#endregion
+
+// CORS configuration
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicyConfig",
+        builder => builder
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
+
+// YARP Reverse Proxy with logging for outgoing requests
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .ConfigureHttpClient((context, handler) =>
+    {
+        WebProxy webProxy = new WebProxy(builder.Configuration.GetSection("WebProxyAddress").Value);
+        handler.Proxy = webProxy;
+        handler.UseProxy = true;
+    })
+    .ConfigureHttpMessageHandlerBuilder(builder =>
+    {
+        var loggerFactory = builder.Services.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("ProxyLogger");
+
+        var innerHandler = builder.PrimaryHandler;
+        builder.PrimaryHandler = new LoggingHandler(innerHandler, logger);
+    });
+
+var app = builder.Build();
+
+// Use CORS
+app.UseCors("CorsPolicyConfig");
+
+// Middleware to log incoming requests and outgoing responses
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+    logger.LogInformation("Request Received: {Method} {Path}{QueryString}", 
+        context.Request.Method, context.Request.Path, context.Request.QueryString);
+
+    if (context.Request.ContentLength > 0 && context.Request.Body.CanSeek)
+    {
+        context.Request.Body.Position = 0;
+        using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+        string body = await reader.ReadToEndAsync();
+        logger.LogDebug("Request Body: {Body}", body);
+        context.Request.Body.Position = 0;
+    }
+
+    await next();
+
+    logger.LogInformation("Response Sent: {StatusCode}", context.Response.StatusCode);
+});
+
+app.UseHttpsRedirection();
+app.UseRouting();
+
+// YARP Reverse Proxy
+app.MapReverseProxy();
+
+// Start the app
+app.Run();
+
+#region LoggingHandler Class
+public class LoggingHandler : DelegatingHandler
+{
+    private readonly ILogger _logger;
+
+    public LoggingHandler(HttpMessageHandler innerHandler, ILogger logger)
+        : base(innerHandler)
+    {
+        _logger = logger;
+    }
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Outgoing Request: {Method} {RequestUri}", request.Method, request.RequestUri);
+
+        if (request.Content != null)
+        {
+            var requestContent = await request.Content.ReadAsStringAsync();
+            _logger.LogDebug("Outgoing Request Content: {Content}", requestContent);
+        }
+
+        var response = await base.SendAsync(request, cancellationToken);
+
+        _logger.LogInformation("Incoming Response: {StatusCode}", response.StatusCode);
+
+        if (response.Content != null)
+        {
+            var responseContent = await response.Content.ReadAsStringAsync();
+            _logger.LogDebug("Incoming Response Content: {Content}", responseContent);
+        }
+
+        return response;
+    }
+}
+#endregion
 
