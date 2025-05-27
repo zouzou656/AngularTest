@@ -2,56 +2,37 @@ app.Use(async (context, next) =>
 {
     var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
-    logger.LogInformation("Request Received: {Method} {Path}{QueryString}", 
+    logger.LogInformation("Request Received: {Method} {Path}{QueryString}",
         context.Request.Method, context.Request.Path, context.Request.QueryString);
-    using var reader = new StreamReader(context.Request.Body);
-    string body = await reader.ReadToEndAsync();
-    logger.LogInformation("Request body Received: {body}", body);
-    
-    await next();
-    using var resReader = new StreamReader(context.Response.Body);
-    string body2=await resReader.ReadToEndAsync();
-    logger.LogInformation("Response Sent: {StatusCode}", body2);
+
+    // Enable buffering for request body
+    context.Request.EnableBuffering();
+
+    if (context.Request.ContentLength > 0 && context.Request.Body.CanSeek)
+    {
+        context.Request.Body.Position = 0;
+        using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        logger.LogInformation("Request Body: {Body}", body);
+        context.Request.Body.Position = 0; // Rewind for YARP to read
+    }
+
+    // Capture original response body stream
+    var originalBodyStream = context.Response.Body;
+    await using var responseBody = new MemoryStream();
+    context.Response.Body = responseBody;
+
+    await next(); // Continue pipeline, including proxy
+
+    // Log response status
+    logger.LogInformation("Response Status: {StatusCode}", context.Response.StatusCode);
+
+    // Read and log response body
+    responseBody.Seek(0, SeekOrigin.Begin);
+    string responseText = await new StreamReader(responseBody).ReadToEndAsync();
+    logger.LogInformation("Response Body: {Body}", responseText);
+
+    // Copy response back to original stream
+    responseBody.Seek(0, SeekOrigin.Begin);
+    await responseBody.CopyToAsync(originalBodyStream);
 });
-\
-
-2025-05-27 14:23:24.532 +03:00 [INF] User profile is available. Using 'C:\Windows\system32\config\systemprofile\AppData\Local\ASP.NET\DataProtection-Keys' as key repository and Windows DPAPI to encrypt keys at rest.
-2025-05-27 14:23:24.615 +03:00 [INF] Loading proxy data from config.
-2025-05-27 14:23:24.796 +03:00 [INF] Now listening on: http://10.0.40.41:8211
-2025-05-27 14:23:24.800 +03:00 [INF] Application started. Hosting environment: Production; Content root path: C:\Alterna-Backend-Services\ReverseProxy
-2025-05-27 14:23:29.136 +03:00 [INF] Request starting HTTP/1.1 POST http://10.0.40.41:8211/port/CAMA/Webservices-MVC/BankInterface/api/BankToPob - application/json;charset=utf-8 719
-2025-05-27 14:23:29.166 +03:00 [INF] Request Received: POST /port/CAMA/Webservices-MVC/BankInterface/api/BankToPob
-2025-05-27 14:23:29.175 +03:00 [INF] Request body Received: "\"{\n    'INVOICES': [\n        {\n    'Client_Number': '315',\n    'Bill_ID': '2025-2892',\n    'Bill_Type': 'A',\n    'Bill_Date': '20250107',\n    'Bill_Last_Payment_date': '20991212',\n    'Departure_Date': '',\n    'Currency': '1',\n    'Bill_Amount': '22232000.00',\n    'CTO_Amount': '',\n    'Check': 'Y',\n    'Client_Name': 'Hanna Ghaddar Rahme',\n    'Ship_Name': '',\n    'Payment_Date': '20160621',\n    'Penalty_CTO': '',\n    'Penalty_Local_Amount': '',\n    'Penalty_Fresh_Amount': '',\n    'Local_Amount': '',\n    'Fresh_Amount': '',\n    'Local_Currency': '',\n    'Fresh_Currency': '',\n    'BankReference': '52J6666666',\n    'Action': 'N',\n    'Bank_Action': 'P',\n    'Bank_id': '170'\n}]}\"\n"
-2025-05-27 14:23:29.177 +03:00 [WRN] Failed to determine the https port for redirect.
-2025-05-27 14:23:29.207 +03:00 [INF] Executing endpoint 'portservices-route'
-2025-05-27 14:23:29.310 +03:00 [INF] Proxying to https://cama.portdebeyrouth.com/CAMA/Webservices-MVC/BankInterface/api/BankToPob HTTP/2 RequestVersionOrLower 
-2025-05-27 14:23:30.000 +03:00 [WRN] "RequestBodyClient": The client reported an error when copying the request body.
-System.AggregateException: One or more errors occurred. (Sent 0 request content bytes, but Content-Length promised 719.) (Error while copying content to a stream.)
- ---> System.InvalidOperationException: Sent 0 request content bytes, but Content-Length promised 719.
-   --- End of inner exception stack trace ---
- ---> (Inner Exception #1) System.Net.Http.HttpRequestException: Error while copying content to a stream.
- ---> System.IO.IOException: An error occurred when reading the request body from the client.
- ---> System.InvalidOperationException: Sent 0 request content bytes, but Content-Length promised 719.
-   --- End of inner exception stack trace ---
-   at Yarp.ReverseProxy.Forwarder.StreamCopyHttpContent.SerializeToStreamAsync(Stream stream, TransportContext context, CancellationToken cancellationToken)
-   at System.Net.Http.HttpContent.<CopyToAsync>g__WaitAsync|56_0(ValueTask copyTask)
-   --- End of inner exception stack trace ---
-   at System.Net.Http.HttpContent.<CopyToAsync>g__WaitAsync|56_0(ValueTask copyTask)
-   at System.Net.Http.HttpConnection.SendRequestContentAsync(HttpRequestMessage request, HttpContentWriteStream stream, Boolean async, CancellationToken cancellationToken)
-   at System.Net.Http.HttpConnection.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
-   at System.Net.Http.HttpConnection.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
-   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
-   at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
-   at Yarp.ReverseProxy.Forwarder.HttpForwarder.SendAsync(HttpContext context, String destinationPrefix, HttpMessageInvoker httpClient, ForwarderRequestConfig requestConfig, HttpTransformer transformer, CancellationToken cancellationToken)<---
-
-2025-05-27 14:23:30.037 +03:00 [INF] Executed endpoint 'portservices-route'
-2025-05-27 14:23:30.051 +03:00 [ERR] Connection id "0HNCT23JSLRLG", Request id "0HNCT23JSLRLG:00000001": An unhandled exception was thrown by the application.
-System.ArgumentException: Stream was not readable.
-   at System.IO.StreamReader..ctor(Stream stream, Encoding encoding, Boolean detectEncodingFromByteOrderMarks, Int32 bufferSize, Boolean leaveOpen)
-   at System.IO.StreamReader..ctor(Stream stream)
-   at Program.<>c.<<<Main>$>b__0_2>d.MoveNext() in D:\@Workspace\deve-repo\alterna-reverse-proxy\ReverseProxy\Program.cs:line 68
---- End of stack trace from previous location ---
-   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
-   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpProtocol.ProcessRequests[TContext](IHttpApplication`1 application)
-2025-05-27 14:23:30.072 +03:00 [INF] Request finished HTTP/1.1 POST http://10.0.40.41:8211/port/CAMA/Webservices-MVC/BankInterface/api/BankToPob - 500 0 null 939.4497ms
-
